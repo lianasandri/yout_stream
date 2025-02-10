@@ -1,0 +1,37 @@
+import express from "express";
+import { exec } from "child_process";
+
+const app = express();
+app.use(express.json());
+
+let streamProcess = null;
+
+app.post("/api/start-stream", (req, res) => {
+  const { driveLink, youtubeKey } = req.body;
+  if (!driveLink || !youtubeKey) {
+    return res.status(400).json({ error: "Missing required parameters" });
+  }
+
+  const command = `ffmpeg -re -i "$(gdown --id ${driveLink} -O -)" -c:v libx264 -preset fast -b:v 2500k -maxrate 2500k -bufsize 5000k -c:a aac -b:a 128k -f flv "rtmp://a.rtmp.youtube.com/live2/${youtubeKey}"`;
+
+  streamProcess = exec(command, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Streaming error: ${error.message}`);
+      return;
+    }
+    console.log(`Streaming output: ${stdout}`);
+  });
+
+  res.json({ message: "Streaming started" });
+});
+
+app.post("/api/stop-stream", (req, res) => {
+  if (streamProcess) {
+    streamProcess.kill("SIGINT");
+    streamProcess = null;
+    return res.json({ message: "Streaming stopped" });
+  }
+  res.status(400).json({ error: "No active stream" });
+});
+
+app.listen(3000, () => console.log("Streaming API running on port 3000"));
